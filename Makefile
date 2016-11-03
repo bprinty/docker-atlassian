@@ -3,66 +3,66 @@
 # Makefile for building atlassian development suite.
 # 
 # @author <bprinty@gmail.com>
+# @version 0.0.1
 # --------------------------------------------------
 
 
 # config
 # ------
 REPO                 = bprinty
-SERVERS              =
+SERVER               = jira bamboo confluence
 BUILD_OPTS           =
+RUN_OPTS             = --detach
 
 
-# main targets
-# ------------
+# targets
+# -------
 default: help
 	@true
 
 
 help:
-	echo "options: build, tag, run, push, pull"
+	@echo "Targets:"
+	@echo "    build       - Build containers from Dockerfiles in repository."
+	@echo "    tag         - Tag built containers using version in repository Dockerfiles."
+	@echo "    run         - Run containers for specified servers."
+	@echo "    kill        - Kill running containers for specified servers."
+	@echo ""
+	@echo "Options:"
+	@echo "    REPO        - Name of repository to build containers under."
+	@echo "    SERVER      - List of servers to operate on (defaults to 'jira bamboo confluence'"
+	@echo "    BUILD_OPTS  - Build options for containers."
+	@echo "    RUN_OPTS    - Options for running containers (defaults to '--detach')"
 
 
-.PHONY: build
-build: $(SERVERS) postgresql
-
-
-tag:
-	for server in $(SERVERS) postgresql; do \
+tag: build
+	@for server in $(SERVER); do \
 		VERSION=`grep '@version ' $$server/Dockerfile | sed 's/.*@version //g'`; \
-		echo docker tag -f $(REPO)/$$server $(REPO)/$$server:$$VERSION; \
+		docker tag $(REPO)/$$server $(REPO)/$$server:$$VERSION; \
+	done
+
+
+build:
+	@for server in $(SERVER); do \
+		cd $$server && docker build $(BUILD_OPTS) -t $(REPO)/$$server .; \
+		cd ..; \
 	done
 
 
 run:
-	@echo "Running servers."
+	@for server in $(SERVER); do \
+		PORT=`grep 'EXPOSE ' $$server/Dockerfile | awk '{ print $$2 }'`; \
+		docker run $(RUN_OPTS) --publish $$PORT:$$PORT $(REPO)/$$server;\
+	done
 
 
-push:
-	@echo "Pushing images to remote locations."
-
-
-pull:
-	@echo "Pulling remote images."
-
-
-# internal
-# --------
-postgresql:
-	cd postgresql/
-	docker build $(BUILD_OPTS) -t $(REPO)/postgresql .
-
-
-jira:
-	cd jira/
-	docker build $(BUILD_OPTS) -t $(REPO)/jira .
-
-
-bamboo:
-	cd bamboo/
-	docker build $(BUILD_OPTS) -t $(REPO)/bamboo .
-
-
-confluence:
-	cd confluence/
-	docker build $(BUILD_OPTS) -t $(REPO)/confluence .
+kill:
+	@for server in $(SERVER); do \
+		CID=`docker ps | grep "$(REPO)/$$server" | awk '{ print $$1 }'`; \
+		if [ ! $$CID ]; then \
+			echo "No running container found for $(REPO)/$$server"; \
+		else \
+			docker stop $$CID; \
+			docker rm $$CID; \
+		fi \
+	done
