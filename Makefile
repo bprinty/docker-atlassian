@@ -3,7 +3,6 @@
 # Makefile for building atlassian development suite.
 # 
 # @author <bprinty@gmail.com>
-# @version 0.0.1
 # --------------------------------------------------
 
 
@@ -24,22 +23,16 @@ default: help
 help:
 	@echo "Targets:"
 	@echo "    build       - Build containers from Dockerfiles in repository."
-	@echo "    tag         - Tag built containers using version in repository Dockerfiles."
-	@echo "    run         - Run containers for specified servers."
-	@echo "    kill        - Kill running containers for specified servers."
+	@echo "    init        - Initialize images and create runnable containers."
+	@echo "    start       - Start initialized containers."
+	@echo "    stop        - Stop running servers."
+	@echo "    clean       - Clean all created images/containers from docker."
 	@echo ""
 	@echo "Options:"
 	@echo "    REPO        - Name of repository to build containers under."
 	@echo "    SERVER      - List of servers to operate on (defaults to 'jira bamboo confluence'"
 	@echo "    BUILD_OPTS  - Build options for containers."
 	@echo "    RUN_OPTS    - Options for running containers (defaults to '--detach')"
-
-
-tag: build
-	@for server in $(SERVER); do \
-		VERSION=`grep '@version ' $$server/Dockerfile | sed 's/.*@version //g'`; \
-		docker tag $(REPO)/$$server $(REPO)/$$server:$$VERSION; \
-	done
 
 
 build:
@@ -49,20 +42,28 @@ build:
 	done
 
 
-run:
+init: build
 	@for server in $(SERVER); do \
 		PORT=`grep 'EXPOSE ' $$server/Dockerfile | awk '{ print $$2 }'`; \
-		docker run $(RUN_OPTS) --publish $$PORT:$$PORT $(REPO)/$$server;\
+		docker run $(RUN_OPTS) --name $$server --publish $$PORT:$$PORT $(REPO)/$$server;\
+		docker stop $$server; \
 	done
 
 
-kill:
+start:
 	@for server in $(SERVER); do \
-		CID=`docker ps | grep "$(REPO)/$$server" | awk '{ print $$1 }'`; \
-		if [ ! $$CID ]; then \
-			echo "No running container found for $(REPO)/$$server"; \
-		else \
-			docker stop $$CID; \
-			docker rm $$CID; \
-		fi \
+		docker start $$server; \
 	done
+
+
+stop:
+	@for server in $(SERVER); do \
+		docker stop $$server; \
+	done
+
+
+clean:
+	@for server in $(SERVER); do \
+		docker rm $$server; \
+		docker rmi $(REPO)/$$server; \
+	done	
